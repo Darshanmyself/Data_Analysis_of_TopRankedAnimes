@@ -1,0 +1,147 @@
+# 1 What is the average duration of episodes in the dataset?
+
+==> select round((episodes*sum(duration_min))/sum(episodes),2) avg_duration from toprankedanime
+    where type_id<>2;
+_____________________________________________________________________________________________________________________________________________
+# 2 How many different types (e.g., TV, OVA, Movie) of entries are there in the dataset?
+
+==> select count(*) from type;
+_____________________________________________________________________________________________________________________________________________
+# 3 What is the most common rating in the dataset?
+
+==> select rating from rating
+    group by rating
+    order by count(rating) desc limit 1;
+_____________________________________________________________________________________________________________________________________________
+# 4 Is there a correlation between the number of episodes and the year they aired?
+
+==> select round(sum((episodes-mean1)*(year-mean2))/((n-1)*stddev1*stddev2),3) correlation from 
+    (select episodes,right(start_date,4)year,avg(episodes) over() mean1,
+    round(avg(right(start_date,4)) over(),4) mean2,round(stddev(episodes) over(),4) stddev1,
+    round(stddev(right(start_date,4)) over(),4) stddev2, count(*) over() n from toprankedanime) cov_table;
+
+--> This shows that there is a weak negative relationship between the episodes and year
+_____________________________________________________________________________________________________________________________________________
+# 5 How has the popularity of anime changed over the years?
+
+==> with cte as (select right(start_date,4) yr,count(name) count from toprankedanime
+    group by right(start_date,4)
+    order by yr)
+    select row_number() over(order by yr) slno,yr,count from cte;
+_____________________________________________________________________________________________________________________________________________
+# 6 Are there any trends in the premiering of anime across different seasons
+
+==> select premiered,count(anime_id) anime_count from premiered
+    where premiered<>'Unknown'
+    group by premiered;
+_____________________________________________________________________________________________________________________________________________
+# 7 Retrieve the names and types of all entries in the dataset.
+
+==> select a.name,t.type from toprankedanime a
+    join type t
+    on t.type_id=a.type_id;
+_____________________________________________________________________________________________________________________________________________
+# 8 Find out anime having episodes greater than 300
+
+==> select name,episodes from toprankedanime
+    where episodes>300
+    order by episodes desc ;
+_____________________________________________________________________________________________________________________________________________
+# 9 List the name of the animes that are currently airing;
+
+==> select t.name from toprankedanime t
+    join status s
+    on s.status_id=t.status_id
+    where s.status='Currently airing';
+_____________________________________________________________________________________________________________________________________________
+# 10 List out the name and episodes of the animes that were premiered in 2020 and order it according the release date
+
+==> select name,episodes from toprankedanime 
+    where right(start_date,4)='2020'
+    order by start_date;
+_____________________________________________________________________________________________________________________________________________
+# 11 Find the maximum and minimum scores in the dataset.
+
+==> select max(score)Max_Score,min(score)Min_Score from toprankedanime;
+_____________________________________________________________________________________________________________________________________________
+# 12 Count the number of entries for each rating category.
+
+==> select distinct(rating),count(anime_id)anime_count from rating
+    group by rating;
+_____________________________________________________________________________________________________________________________________________
+# 14 Identify the top 10 most popular animes
+
+==> select name,popularity from toprankedanime
+    order by popularity desc limit 10;
+_____________________________________________________________________________________________________________________________________________
+# 15 List producers who have produced animes with an average score above 8
+
+==> select a.name,a.score,group_concat(p.producer_name order by p.producer_id separator ',')producers from producer p
+    join anime_producer ap
+    on p.producer_id=ap.producer_id
+    join toprankedanime a
+    on a.anime_id=ap.anime_id
+    where a.score>8.5
+    group by a.name
+    order by a.score desc;
+_____________________________________________________________________________________________________________________________________________
+# 16 List the names and genres of entries along with their licensors.
+
+==> select a.name,group_concat(g.genre order by g.genre_id separator ',') genres,
+    group_concat(l.licensor order by l.licensor_id separator ',') licensors 
+    from toprankedanime a
+    join anime_genre ag
+    on a.anime_id=ag.anime_id
+    join genre g
+    on g.genre_id=ag.genre_id
+    join anime_licensor al
+    on a.anime_id=al.anime_id
+    join licensor l
+    on l.licensor_id=al.licensor_id
+    where l.licensor<>'Missing'
+    group by a.name
+    order by a.anime_id;
+_____________________________________________________________________________________________________________________________________________
+# 17 Find animes that have a higher score than the average score across all animes.
+
+==> select name,score from toprankedanime
+    where score>(select round(avg(score),2) from toprankedanime);
+_____________________________________________________________________________________________________________________________________________
+# 18 Do certain producers or studios tend to produce anime with higher scores or popularity ratings?
+
+==> select a.studios,a.studio_score,a.studio_popularity,
+    b.producer_name,b.producer_score,b.producer_popularity 
+    from 
+    (select s.anime_id,s.studios,round(avg(t.score),2) studio_score,round(avg(t.popularity)) studio_popularity from toprankedanime t
+    join studios s
+    on t.anime_id=s.anime_id
+    group by s.studios
+    order by studio_score desc,studio_popularity desc) a
+    right join 
+    (select ap.anime_id,p.producer_name,round(avg(t.score),2) producer_score,round(avg(t.popularity)) producer_popularity from toprankedanime t
+    join anime_producer ap
+    on t.anime_id=ap.anime_id
+    join producer p
+    on ap.producer_id=p.producer_id
+    group by p.producer_name
+    order by producer_score desc,producer_popularity desc)b
+    on a.anime_id=b.anime_id
+    order by a.anime_id;
+_____________________________________________________________________________________________________________________________________________
+# 19 Can you predict the popularity or score of an anime based on its genre and rating?
+
+==> select g.genre,round(avg(t.score),2) score,round(avg(t.popularity)) popularity from toprankedanime t
+    join anime_genre ag
+    on t.anime_id=ag.anime_id
+    join genre g
+    on g.genre_id=ag.genre_id
+    where genre<>'Missing'
+    group by g.genre
+    order by score desc,popularity desc;
+_____________________________________________________________________________________________________________________________________________
+# 20 List out all the distinct soureces and the number of animes it contains;
+
+==> select distinct(source),count(anime_id)anime_count from source
+    where source<>'Unknown'
+    group by source
+    order by anime_count desc;
